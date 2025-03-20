@@ -139,13 +139,52 @@ class RheologyGUI:
         scrollbar.grid(row=1, column=3, sticky=tk.NS)
         self.thixotropy_file_list.config(yscrollcommand=scrollbar.set)
 
-        # Action buttons
+        # Results frame - NEW
+        results_frame = ttk.LabelFrame(parent, text="Analysis Results", padding="10")
+        results_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        # Create a Treeview widget to display results in a table
+        columns = ("Metric", "Value")
+        self.results_tree = ttk.Treeview(results_frame, columns=columns, show="headings", height=5)
+
+        # Configure columns
+        self.results_tree.heading("Metric", text="Metric")
+        self.results_tree.heading("Value", text="Value")
+        self.results_tree.column("Metric", width=250)
+        self.results_tree.column("Value", width=150)
+
+        # Add scrollbar
+        results_scrollbar = ttk.Scrollbar(results_frame, orient=tk.VERTICAL, command=self.results_tree.yview)
+        self.results_tree.configure(yscrollcommand=results_scrollbar.set)
+
+        # Grid layout for results tree and scrollbar
+        self.results_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        results_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Action buttons for thixotropy tab
         button_frame = ttk.Frame(parent)
         button_frame.pack(fill=tk.X, padx=5, pady=10)
 
-        ttk.Button(button_frame, text="Process and Plot", command=self.process_thixotropy).pack(side=tk.RIGHT, padx=5)
-        ttk.Button(button_frame, text="Clear Selection", command=self.clear_thixotropy_selection).pack(side=tk.RIGHT,
-                                                                                                       padx=5)
+        # New analyze button
+        ttk.Button(
+            button_frame,
+            text="Analyze Thixotropy",
+            command=self.analyze_thixotropy
+        ).pack(side=tk.RIGHT, padx=5)
+
+        # Regular plot button
+        ttk.Button(
+            button_frame,
+            text="Process and Plot",
+            command=self.process_thixotropy
+        ).pack(side=tk.RIGHT, padx=5)
+
+        # Clear button
+        ttk.Button(
+            button_frame,
+            text="Clear Selection",
+            command=self.clear_thixotropy_selection
+        ).pack(side=tk.RIGHT, padx=5)
 
     def select_viscosity_files(self):
         multiple = self.viscosity_file_mode.get() == "M"
@@ -198,6 +237,114 @@ class RheologyGUI:
     def clear_thixotropy_selection(self):
         self.selected_thixotropy_files = []
         self.update_thixotropy_file_list()
+        # Clear the results tree as well
+        self.clear_results_display()
+
+    def clear_results_display(self):
+        """Clear all items from the results treeview."""
+        for item in self.results_tree.get_children():
+            self.results_tree.delete(item)
+
+    def display_thixotropy_results(self, results):
+        """
+        Display thixotropy analysis results in the treeview.
+
+        Parameters:
+        results (dict): Dictionary containing metric names and values
+        """
+        # Clear existing data
+        self.clear_results_display()
+
+        # Add new results to the treeview
+        for metric, value in results.items():
+            # Format numerical values to 2 decimal places if applicable
+            if isinstance(value, (int, float)):
+                formatted_value = f"{value:.2f}" if isinstance(value, float) else str(value)
+            else:
+                formatted_value = str(value)
+
+            self.results_tree.insert("", tk.END, values=(metric, formatted_value))
+
+        # Update status
+        self.status_var.set("Thixotropy analysis completed")
+
+    def display_multiple_thixotropy_results(self, all_results):
+        """
+        Display results from multiple files in the treeview.
+
+        Parameters:
+        all_results (dict): Dictionary mapping sample names to result dictionaries
+        """
+        # Clear existing data
+        self.clear_results_display()
+
+        # For multiple samples, we'll organize by sample name first
+        for sample_name, results in all_results.items():
+            # Add the sample name as a parent item
+            sample_id = self.results_tree.insert("", tk.END, text=sample_name,
+                                                 values=(sample_name, ""))
+
+            # Add the sample's metrics as child items
+            for metric, value in results.items():
+                if isinstance(value, (int, float)):
+                    formatted_value = f"{value:.2f}" if isinstance(value, float) else str(value)
+                else:
+                    formatted_value = str(value)
+
+                self.results_tree.insert(sample_id, tk.END, values=(metric, formatted_value))
+
+        # Update status
+        self.status_var.set(f"Analyzed {len(all_results)} samples")
+
+    def analyze_thixotropy(self):
+        """
+        Analyze thixotropy data and display results without creating plots.
+        """
+        if not hasattr(self, 'selected_thixotropy_files') or not self.selected_thixotropy_files:
+            messagebox.showwarning("No Files Selected", "Please select at least one file to analyze.")
+            return
+
+        mode = self.thixotropy_file_mode.get()
+
+        try:
+            if mode == "S":
+                # Single file analysis
+                file_path = self.selected_thixotropy_files[0]
+                _, results = self.processor.analyze_thixotropy_single(file_path)
+
+                if "Error" in results:
+                    messagebox.showerror("Analysis Error", results["Error"])
+                else:
+                    self.display_thixotropy_results(results)
+                    messagebox.showinfo("Analysis Complete",
+                                        "Thixotropy analysis completed successfully.")
+
+            else:  # Multiple files
+                # Multiple file analysis
+                all_results = self.processor.analyze_thixotropy_multiple(self.selected_thixotropy_files)
+
+                # Check if any files had errors
+                errors = [f"{sample}: {results['Error']}"
+                          for sample, results in all_results.items()
+                          if "Error" in results]
+
+                if errors:
+                    error_message = "Errors occurred during analysis:\n" + "\n".join(errors)
+                    messagebox.showwarning("Analysis Warning", error_message)
+
+                # Display all results, including any that were successful
+                self.display_multiple_thixotropy_results(all_results)
+
+                # Show success message if at least some files were analyzed successfully
+                successful = len(all_results) - len(errors)
+                if successful > 0:
+                    messagebox.showinfo("Analysis Complete",
+                                        f"Successfully analyzed {successful} out of {len(all_results)} files.")
+
+        except Exception as e:
+            messagebox.showerror("Unexpected Error", f"An error occurred during analysis: {str(e)}")
+            # Log the full error for debugging
+            print(f"Error in analyze_thixotropy: {e}")
 
     def process_viscosity(self):
         if not hasattr(self, 'selected_viscosity_files') or not self.selected_viscosity_files:
@@ -234,7 +381,7 @@ class RheologyGUI:
                                               f"Plot saved successfully to:\n{full_output_path}\n\nWould you like to open the plot?")
             if open_result:
                 # Open the plot file with the default application
-                os.startfile(full_output_path)
+                self.open_file(full_output_path)
         else:
             messagebox.showwarning("Warning", "Plot file not found at expected location")
 
@@ -260,9 +407,21 @@ class RheologyGUI:
                                               f"Plot saved successfully to:\n{full_output_path}\n\nWould you like to open the plot?")
             if open_result:
                 # Open the plot file with the default application
-                os.startfile(full_output_path)
+                self.open_file(full_output_path)
         else:
             messagebox.showwarning("Warning", "Plot file not found at expected location")
+
+    def open_file(self, file_path):
+        """Open a file with the default application."""
+        try:
+            if platform.system() == 'Windows':
+                os.startfile(file_path)
+            elif platform.system() == 'Darwin':  # macOS
+                subprocess.run(['open', file_path], check=True)
+            else:  # Linux
+                subprocess.run(['xdg-open', file_path], check=True)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to open file: {str(e)}")
 
 
 def main():
