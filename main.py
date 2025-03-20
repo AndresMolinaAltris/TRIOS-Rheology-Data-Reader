@@ -235,13 +235,7 @@ class RheologyGUI:
                                                   f"Plot saved successfully to:\n{full_output_path}\n\nWould you like to open the plot?")
                 if open_result:
                     # Open the plot file with the default application
-                    system = platform.system()
-                    if system == 'Windows':
-                        os.startfile(full_output_path)
-                    elif system == 'Darwin':  # macOS
-                        subprocess.call(['open', full_output_path])
-                    else:  # Linux
-                        subprocess.call(['xdg-open', full_output_path])
+                    os.startfile(full_output_path)
             else:
                 messagebox.showwarning("Warning", "Plot file not found at expected location")
 
@@ -271,13 +265,7 @@ class RheologyGUI:
                                                   f"Plot saved successfully to:\n{full_output_path}\n\nWould you like to open the plot?")
                 if open_result:
                     # Open the plot file with the default application
-                    system = platform.system()
-                    if system == 'Windows':
-                        os.startfile(full_output_path)
-                    elif system == 'Darwin':  # macOS
-                        subprocess.call(['open', full_output_path])
-                    else:  # Linux
-                        subprocess.call(['xdg-open', full_output_path])
+                    os.startfile(full_output_path)
             else:
                 messagebox.showwarning("Warning", "Plot file not found at expected location")
 

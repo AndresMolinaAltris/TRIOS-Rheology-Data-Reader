@@ -17,7 +17,6 @@ def calculate_viscosity_ratio(df):
 
     return viscosity_ratio
 
-
 def calculate_structural_recovery(df):
     """Computes structural recovery percentage."""
     eta_preshear = df[df["peak"] == "PRESHEAR"]["Viscosity"].iloc[-1]
@@ -25,7 +24,6 @@ def calculate_structural_recovery(df):
     eta_recovery = df[df["peak"] == "RECOVERY"]["Viscosity"].iloc[-1]
 
     return ((eta_recovery - eta_highshear) / (eta_preshear - eta_highshear)) * 100
-
 
 def calculate_thixotropic_index(df):
     """Computes thixotropic index (ratio of low shear to high shear viscosity)."""
@@ -41,7 +39,6 @@ def calculate_thixotropic_index(df):
 
 
     return thixotropic_index
-
 
 def calculate_80_percent_viscosity_recovery(df):
 
