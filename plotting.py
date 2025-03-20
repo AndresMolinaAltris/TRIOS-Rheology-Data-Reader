@@ -35,13 +35,16 @@ def plot_viscosity_data(df, fig_name, export_path, sweep_types=None, datasets=No
     all_labels = []
     all_handles = []
 
+    # Added this to pass the dataset as an entire string and not a character
+    if isinstance(datasets, str):
+        datasets = [datasets]
+
     # Plot each dataset
     for i, (data, dataset_name) in enumerate(zip(df, datasets)):
         # Determine which sweeps to plot
         available_sweeps = data["Sweep"].unique()
         sweep_list = available_sweeps if sweep_types is None else \
             [sweep_types] if isinstance(sweep_types, str) else sweep_types
-
         # Plot each sweep
         for j, sweep in enumerate(sweep_list):
             if sweep not in available_sweeps:
@@ -55,14 +58,13 @@ def plot_viscosity_data(df, fig_name, export_path, sweep_types=None, datasets=No
             marker_idx = (i * len(sweep_list) + j) % len(markers)
 
             # Create label based on context
-            if len(df) == 1 and len(sweep_list) == 1:
-                label = dataset_name
-            elif len(df) == 1:
-                label = f"{sweep} Sweep"
-            elif len(sweep_list) == 1:
-                label = dataset_name
+            if len(df) == 1:
+                if len(sweep_list) == 1:
+                    label = dataset_name  # For single dataset, just the dataset name
+                else:
+                    label = f"{sweep} Sweep"  # If multiple sweeps, add sweep type to label
             else:
-                label = f"{dataset_name} - {sweep} Sweep"
+                label = f"{dataset_name} - {sweep} Sweep"  # Multiple datasets with sweep types
 
             # Plot data
             scatter = plt.scatter(
