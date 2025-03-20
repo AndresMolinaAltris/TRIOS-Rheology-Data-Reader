@@ -151,11 +151,15 @@ class DataProcessor:
         # Full path for output file
         full_output_path = os.path.join(self.output_directory, fig_name)
 
+        # Name of the dataset
+        name = re.split('[-_]', fig_name)[0]
+
         # Plot data
         plot_thixotropy_data(
             df_list=df,
             fig_name=fig_name,
-            export_path=self.output_directory
+            export_path=self.output_directory,
+            datasets=name
         )
 
         return df, fig_name, full_output_path

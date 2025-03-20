@@ -204,6 +204,10 @@ def plot_thixotropy_data(df_list, fig_name, export_path, datasets=None, colors=N
 
     plt.figure(figsize=(10, 8))
 
+    # Added this to pass the dataset as an entire string and not a character
+    if isinstance(datasets, str):
+        datasets = [datasets]
+
     for i, (df, dataset_name) in enumerate(zip(df_list, datasets)):
         if "Time" not in df.columns or "Viscosity" not in df.columns:
             raise ValueError(f"Dataset {dataset_name} is missing required columns: 'Time' and 'Viscosity'")
