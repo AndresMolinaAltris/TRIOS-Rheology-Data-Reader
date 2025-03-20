@@ -21,3 +21,6 @@ Thumbs.db
 
 # Ignore configuration files
 config.txt
+
+# Other files
+*.xml
