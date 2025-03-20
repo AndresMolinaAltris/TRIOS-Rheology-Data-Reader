@@ -214,33 +214,29 @@ class RheologyGUI:
         else:
             sweep_type = sweep_type_value
 
-        try:
-            if mode == "S":
-                file_path = self.selected_viscosity_files[0]
+        if mode == "S":
+            file_path = self.selected_viscosity_files[0]
 
-                if plot_type == "N":
-                    df, fig_name, full_output_path = self.processor.process_viscosity_single(file_path, sweep_type)
-                else:  # plot_type == "D"
-                    df, fig_name, full_output_path = self.processor.process_diff_viscosity_single(file_path, sweep_type)
+            if plot_type == "N":
+                df, fig_name, full_output_path = self.processor.process_viscosity_single(file_path, sweep_type)
+            else:  # plot_type == "D"
+                df, fig_name, full_output_path = self.processor.process_diff_viscosity_single(file_path, sweep_type)
 
-                self.status_var.set(f"Plot saved: {os.path.basename(full_output_path)}")
-            else:  # mode == "M"
-                dataframes, dataset_names, fig_name, full_output_path = self.processor.process_viscosity_multiple(
-                    self.selected_viscosity_files, sweep_type
-                )
-                self.status_var.set(f"Comparison plot saved: {os.path.basename(full_output_path)}")
+            self.status_var.set(f"Plot saved: {os.path.basename(full_output_path)}")
+        else:  # mode == "M"
+            dataframes, dataset_names, fig_name, full_output_path = self.processor.process_viscosity_multiple(
+                self.selected_viscosity_files, sweep_type
+            )
+            self.status_var.set(f"Comparison plot saved: {os.path.basename(full_output_path)}")
 
-            if os.path.exists(full_output_path):
-                open_result = messagebox.askyesno("Success",
-                                                  f"Plot saved successfully to:\n{full_output_path}\n\nWould you like to open the plot?")
-                if open_result:
-                    # Open the plot file with the default application
-                    os.startfile(full_output_path)
-            else:
-                messagebox.showwarning("Warning", "Plot file not found at expected location")
-
-        except Exception as e:
-            messagebox.showerror("Error", f"An error occurred during processing: {str(e)}")
+        if os.path.exists(full_output_path):
+            open_result = messagebox.askyesno("Success",
+                                              f"Plot saved successfully to:\n{full_output_path}\n\nWould you like to open the plot?")
+            if open_result:
+                # Open the plot file with the default application
+                os.startfile(full_output_path)
+        else:
+            messagebox.showwarning("Warning", "Plot file not found at expected location")
 
     def process_thixotropy(self):
         if not hasattr(self, 'selected_thixotropy_files') or not self.selected_thixotropy_files:
@@ -249,28 +245,24 @@ class RheologyGUI:
 
         mode = self.thixotropy_file_mode.get()
 
-        try:
-            if mode == "S":
-                file_path = self.selected_thixotropy_files[0]
-                df, fig_name, full_output_path = self.processor.process_thixotropy_single(file_path)
-                self.status_var.set(f"Plot saved: {os.path.basename(full_output_path)}")
-            else:  # mode == "M"
-                dataframes, dataset_names, fig_name, full_output_path = self.processor.process_thixotropy_multiple(
-                    self.selected_thixotropy_files
-                )
-                self.status_var.set(f"Comparison plot saved: {os.path.basename(full_output_path)}")
+        if mode == "S":
+            file_path = self.selected_thixotropy_files[0]
+            df, fig_name, full_output_path = self.processor.process_thixotropy_single(file_path)
+            self.status_var.set(f"Plot saved: {os.path.basename(full_output_path)}")
+        else:  # mode == "M"
+            dataframes, dataset_names, fig_name, full_output_path = self.processor.process_thixotropy_multiple(
+                self.selected_thixotropy_files
+            )
+            self.status_var.set(f"Comparison plot saved: {os.path.basename(full_output_path)}")
 
-            if os.path.exists(full_output_path):
-                open_result = messagebox.askyesno("Success",
-                                                  f"Plot saved successfully to:\n{full_output_path}\n\nWould you like to open the plot?")
-                if open_result:
-                    # Open the plot file with the default application
-                    os.startfile(full_output_path)
-            else:
-                messagebox.showwarning("Warning", "Plot file not found at expected location")
-
-        except Exception as e:
-            messagebox.showerror("Error", f"An error occurred during processing: {str(e)}")
+        if os.path.exists(full_output_path):
+            open_result = messagebox.askyesno("Success",
+                                              f"Plot saved successfully to:\n{full_output_path}\n\nWould you like to open the plot?")
+            if open_result:
+                # Open the plot file with the default application
+                os.startfile(full_output_path)
+        else:
+            messagebox.showwarning("Warning", "Plot file not found at expected location")
 
 
 def main():

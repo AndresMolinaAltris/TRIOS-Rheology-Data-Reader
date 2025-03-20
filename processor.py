@@ -148,8 +148,8 @@ class DataProcessor:
         # Generate filename
         fig_name = os.path.splitext(os.path.basename(file_path))[0]
 
-        # Full path for output file
-        full_output_path = os.path.join(self.output_directory, fig_name)
+        # Full path for output file. Added a png extension
+        full_output_path = os.path.join(self.output_directory, fig_name + ".png")
 
         # Name of the dataset
         name = re.split('[-_]', fig_name)[0]
@@ -189,8 +189,9 @@ class DataProcessor:
         # Generate filename
         fig_name = "comparison"
 
-        # Full path for output file
-        full_output_path = os.path.join(self.output_directory, fig_name)
+        # Full path for output file. Added the png extension
+        full_output_path = os.path.join(self.output_directory, fig_name + ".png")
+        print(full_output_path)
 
         # Plot data
         plot_thixotropy_data(
