@@ -1,11 +1,10 @@
 from data_import import *
 from plotting import *
+from data_analysis import calculate_viscosity_ratio, calculate_thixotropic_index, \
+    calculate_80_percent_viscosity_recovery, calculate_structural_recovery
+import pandas as pd
 import re
-from data_analysis import (calculate_viscosity_ratio,
-                           calculate_thixotropic_index,
-                           calculate_80_percent_viscosity_recovery,
-                           calculate_structural_recovery)
-
+import os
 
 
 class DataProcessor:
@@ -104,18 +103,17 @@ class DataProcessor:
 
     def process_diff_viscosity_single(self, file_path, sweep_type):
         """
-                Process a single differential viscosity data file and generate a plot.
+        Process a single differential viscosity data file and generate a plot.
 
-                Parameters:
-                file_path (str): Path to the viscosity data file.
-                sweep_type (str or list): Type of sweep (e.g., 'up', 'down', or ['up', 'down']).
+        Parameters:
+        file_path (str): Path to the viscosity data file.
+        sweep_type (str or list): Type of sweep (e.g., 'up', 'down', or ['up', 'down']).
 
-                Returns:
-                tuple: DataFrame containing processed data, filename of the generated plot, full path of the output file.
-                """
+        Returns:
+        tuple: DataFrame containing processed data, filename of the generated plot, full path of the output file.
+        """
         # Load data
         df = load_viscosity_stress_data(file_path)
-
 
         # Generate filename
         fig_name = os.path.splitext(os.path.basename(file_path))[0]
@@ -207,6 +205,8 @@ class DataProcessor:
         )
 
         return dataframes, dataset_names, fig_name, full_output_path
+
+    # ================ ANALYSIS METHODS ================
 
     def calculate_thixotropy_metrics(self, df):
         """
@@ -300,3 +300,109 @@ class DataProcessor:
                 all_results[os.path.basename(file_path)] = {"Error": f"Failed to analyze file: {str(e)}"}
 
         return all_results
+
+    # ================ EXPORT METHODS ================
+
+    def export_thixotropy_results_single(self, results, file_path, export_format='csv'):
+        """
+        Export thixotropy analysis results for a single file to CSV or Excel.
+
+        Parameters:
+        results (dict): Dictionary containing metric names and values
+        file_path (str): Path to save the exported file
+        export_format (str): Format to export ('csv' or 'excel')
+
+        Returns:
+        tuple: (Success flag, message or error)
+        """
+        try:
+            # Create a DataFrame from the results
+            metrics_df = pd.DataFrame(list(results.items()), columns=['Metric', 'Value'])
+
+            # Export based on the requested format
+            if export_format.lower() == 'csv':
+                metrics_df.to_csv(file_path, index=False)
+                return True, file_path
+            elif export_format.lower() == 'excel':
+                try:
+                    # Try to use to_excel directly (works with openpyxl as default engine)
+                    metrics_df.to_excel(file_path, index=False, sheet_name='Thixotropy Metrics')
+                    return True, file_path
+                except Exception as excel_error:
+                    print(f"Excel export error: {str(excel_error)}")
+                    # Fallback to CSV if Excel export fails
+                    csv_path = os.path.splitext(file_path)[0] + ".csv"
+                    metrics_df.to_csv(csv_path, index=False)
+                    return True, f"Exported as CSV to {csv_path} (Excel export failed)"
+            else:
+                return False, f"Unsupported export format: {export_format}"
+
+        except Exception as e:
+            return False, f"Export failed: {str(e)}"
+
+    def export_thixotropy_results_multiple(self, all_results, file_path, export_format='csv'):
+        """
+        Export thixotropy analysis results for multiple files to CSV or Excel.
+
+        Parameters:
+        all_results (dict): Dictionary mapping sample names to result dictionaries
+        file_path (str): Path to save the exported file
+        export_format (str): Format to export ('csv' or 'excel')
+
+        Returns:
+        tuple: (Success flag, message or error)
+        """
+        try:
+            # First, create a unified data structure
+            # Get all possible metrics from all samples
+            all_metrics = set()
+            for sample_results in all_results.values():
+                all_metrics.update(sample_results.keys())
+
+            # Create a DataFrame with samples as rows and metrics as columns
+            data = []
+            for sample, results in all_results.items():
+                row = {'Sample': sample}
+                for metric in all_metrics:
+                    row[metric] = results.get(metric, None)
+                data.append(row)
+
+            metrics_df = pd.DataFrame(data)
+
+            # Also create long format for potential Excel export
+            long_data = []
+            for sample, results in all_results.items():
+                for metric, value in results.items():
+                    long_data.append({
+                        'Sample': sample,
+                        'Metric': metric,
+                        'Value': value
+                    })
+
+            long_df = pd.DataFrame(long_data)
+
+            # Export based on the requested format
+            if export_format.lower() == 'csv':
+                # For CSV, just export the wide format
+                metrics_df.to_csv(file_path, index=False)
+                return True, file_path
+            elif export_format.lower() == 'excel':
+                try:
+                    # Try to use ExcelWriter with xlsxwriter
+                    with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+                        # Wide format
+                        metrics_df.to_excel(writer, sheet_name='Metrics Summary', index=False)
+                        # Long format (for easier plotting)
+                        long_df.to_excel(writer, sheet_name='Metrics Detail', index=False)
+                    return True, file_path
+                except Exception as excel_error:
+                    print(f"Excel export error: {str(excel_error)}")
+                    # Fallback to CSV if Excel export fails
+                    csv_path = os.path.splitext(file_path)[0] + ".csv"
+                    metrics_df.to_csv(csv_path, index=False)
+                    return True, f"Exported as CSV to {csv_path} (Excel export failed)"
+            else:
+                return False, f"Unsupported export format: {export_format}"
+
+        except Exception as e:
+            return False, f"Export failed: {str(e)}"

@@ -18,6 +18,10 @@ class RheologyGUI:
         self.selected_thixotropy_files = []
         self.processor = DataProcessor(self.output_directory)  # Create processor at initialization
 
+        # Store analysis results for potential export
+        self.current_results = None
+        self.current_multiple_results = None
+
         self.create_widgets()
 
     def get_output_directory(self):
@@ -139,7 +143,7 @@ class RheologyGUI:
         scrollbar.grid(row=1, column=3, sticky=tk.NS)
         self.thixotropy_file_list.config(yscrollcommand=scrollbar.set)
 
-        # Results frame - NEW
+        # Results frame
         results_frame = ttk.LabelFrame(parent, text="Analysis Results", padding="10")
         results_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
@@ -161,7 +165,23 @@ class RheologyGUI:
         self.results_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         results_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        # Action buttons for thixotropy tab
+        # Export options frame
+        export_frame = ttk.LabelFrame(parent, text="Export Options", padding="10")
+        export_frame.pack(fill=tk.X, padx=5, pady=5)
+
+        # Export format
+        ttk.Label(export_frame, text="Export Format:").grid(row=0, column=0, sticky=tk.W)
+        self.export_format = tk.StringVar(value="csv")
+        ttk.Radiobutton(export_frame, text="CSV", variable=self.export_format, value="csv").grid(
+            row=0, column=1, sticky=tk.W)
+        ttk.Radiobutton(export_frame, text="Excel", variable=self.export_format, value="excel").grid(
+            row=0, column=2, sticky=tk.W)
+
+        # Export button
+        ttk.Button(export_frame, text="Export Results", command=self.export_thixotropy_results).grid(
+            row=0, column=3, padx=5)
+
+        # Action buttons
         button_frame = ttk.Frame(parent)
         button_frame.pack(fill=tk.X, padx=5, pady=10)
 
@@ -240,6 +260,10 @@ class RheologyGUI:
         # Clear the results tree as well
         self.clear_results_display()
 
+        # Reset stored results
+        self.current_results = None
+        self.current_multiple_results = None
+
     def clear_results_display(self):
         """Clear all items from the results treeview."""
         for item in self.results_tree.get_children():
@@ -252,6 +276,10 @@ class RheologyGUI:
         Parameters:
         results (dict): Dictionary containing metric names and values
         """
+        # Store the results for potential export
+        self.current_results = results
+        self.current_multiple_results = None
+
         # Clear existing data
         self.clear_results_display()
 
@@ -275,6 +303,10 @@ class RheologyGUI:
         Parameters:
         all_results (dict): Dictionary mapping sample names to result dictionaries
         """
+        # Store the results for potential export
+        self.current_results = None
+        self.current_multiple_results = all_results
+
         # Clear existing data
         self.clear_results_display()
 
@@ -345,6 +377,61 @@ class RheologyGUI:
             messagebox.showerror("Unexpected Error", f"An error occurred during analysis: {str(e)}")
             # Log the full error for debugging
             print(f"Error in analyze_thixotropy: {e}")
+
+    def export_thixotropy_results(self):
+        """
+        Export the current thixotropy analysis results to a file.
+        """
+        # Check if we have results to export
+        if self.current_results is None and self.current_multiple_results is None:
+            messagebox.showwarning("No Results", "Please analyze data before exporting results.")
+            return
+
+        # Get export format
+        export_format = self.export_format.get()
+        file_extension = ".csv" if export_format == "csv" else ".xlsx"
+
+        # Ask user for save location
+        file_types = [("CSV Files", "*.csv")] if export_format == "csv" else [("Excel Files", "*.xlsx")]
+        default_filename = "thixotropy_results" + file_extension
+
+        save_path = filedialog.asksaveasfilename(
+            title="Save Results As",
+            filetypes=file_types,
+            defaultextension=file_extension,
+            initialfile=default_filename,
+            initialdir=self.output_directory
+        )
+
+        if not save_path:
+            return  # User cancelled
+
+        try:
+            # Export based on what type of results we have
+            if self.current_results is not None:
+                # Single file results
+                success, message = self.processor.export_thixotropy_results_single(
+                    self.current_results, save_path, export_format)
+            else:
+                # Multiple file results
+                success, message = self.processor.export_thixotropy_results_multiple(
+                    self.current_multiple_results, save_path, export_format)
+
+            # Show appropriate message
+            if success:
+                messagebox.showinfo("Export Successful",
+                                    f"Results exported successfully to:\n{message}")
+
+                # Ask if user wants to open the file
+                open_file = messagebox.askyesno("Open File",
+                                                "Would you like to open the exported file?")
+                if open_file:
+                    self.open_file(save_path)
+            else:
+                messagebox.showerror("Export Failed", message)
+
+        except Exception as e:
+            messagebox.showerror("Export Error", f"An unexpected error occurred during export: {str(e)}")
 
     def process_viscosity(self):
         if not hasattr(self, 'selected_viscosity_files') or not self.selected_viscosity_files:
