@@ -9,11 +9,6 @@ def calculate_viscosity_ratio(df):
 
 
     viscosity_ratio = (eta_recovery / eta_preshear) * 100
-    print(f"Viscosity Ratio")
-    print(f"viscosity pre-shear: {eta_preshear}")
-    print(f"viscosity recovery: {eta_recovery}")
-    print(f"viscosity ratio: {viscosity_ratio}")
-
 
     return viscosity_ratio
 
@@ -31,12 +26,6 @@ def calculate_thixotropic_index(df):
     eta_highshear = df[df["peak"] == "HIGHSHEAR"]["Viscosity"].iloc[-1]
 
     thixotropic_index = eta_preshear / eta_highshear
-
-    print(f"Thixotropic Index")
-    print(f"viscosity low shear: {eta_preshear}")
-    print(f"viscosity high shear: {eta_highshear}")
-    print(f"Thixotropic index: {thixotropic_index}")
-
 
     return thixotropic_index
 
@@ -62,10 +51,6 @@ def calculate_80_percent_viscosity_recovery(df):
 
     # Get the time corresponding to the closest viscosity value
     recovery_time_80_percent = recovery_df.loc[closest_match_idx, "Step time"]
-
-    print(f"Slurry Recovery")
-    print(f"Recovery Time: {recovery_time_80_percent}")
-
 
     return recovery_time_80_percent
 
