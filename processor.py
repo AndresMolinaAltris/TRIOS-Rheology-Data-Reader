@@ -77,7 +77,7 @@ class DataProcessor:
             dataframes.append(df)
 
             # Use filename as dataset name
-            name = os.path.splitext(os.path.basename(file_path))[0]
+            name = os.path.splitext(os.path.basename(file_path))[0].split('_')[0]
             dataset_names.append(name)
 
         # Generate filename

@@ -37,7 +37,9 @@ def plot_viscosity_data(df, fig_name, export_path, sweep_types=None, datasets=No
 
     # Added this to pass the dataset as an entire string and not a character
     if isinstance(datasets, str):
-        datasets = [datasets]
+        datasets = [datasets.split('_')[0]]  # Take first part before underscore
+    elif datasets is not None:
+        datasets = [d.split('_')[0] for d in datasets]  # Process each dataset name
 
     # Plot each dataset
     for i, (data, dataset_name) in enumerate(zip(df, datasets)):
@@ -206,7 +208,9 @@ def plot_thixotropy_data(df_list, fig_name, export_path, datasets=None, colors=N
 
     # Added this to pass the dataset as an entire string and not a character
     if isinstance(datasets, str):
-        datasets = [datasets]
+        datasets = [datasets.split('_')[0]]
+    elif datasets is not None:
+        datasets = [d.split('_')[0] for d in datasets]
 
     for i, (df, dataset_name) in enumerate(zip(df_list, datasets)):
         if "Time" not in df.columns or "Viscosity" not in df.columns:
