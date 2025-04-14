@@ -3,9 +3,15 @@ from tkinter import ttk, filedialog, messagebox
 import subprocess
 import platform
 import os
+
+# Matplotlib imports
+import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
+# Your other imports
 from plotting import *
 from processor import DataProcessor
-from file_selector import FileSelector  # Changed to match your file name
 
 
 class RheologyGUI:
@@ -16,14 +22,13 @@ class RheologyGUI:
         self.root.resizable(True, True)
 
         self.output_directory = self.get_output_directory()
-        self.selected_viscosity_files = []
-        self.selected_thixotropy_files = []
         self.processor = DataProcessor(self.output_directory)
 
-        # Store analysis results for potential export
-        self.current_results = None
-        self.current_multiple_results = None
+        # Initialize variables that will be used across methods
+        self.selected_files = []
+        self.viscosity_status_var = tk.StringVar(value="No files selected")
 
+        # Create the UI
         self.create_widgets()
 
     def get_output_directory(self):
@@ -42,14 +47,12 @@ class RheologyGUI:
         self.notebook = ttk.Notebook(self.root)
         self.notebook.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
 
-        # Create viscosity tab using our file selector component
+        # Create viscosity tab
         self.viscosity_tab = ttk.Frame(self.notebook)
         self.notebook.add(self.viscosity_tab, text="Viscosity")
 
-        # Create the file selector within the tab
-        self.viscosity_file_selector = FileSelector(self.viscosity_tab,
-                                                    initial_dir=self.output_directory)
-        self.viscosity_file_selector.pack(fill=tk.BOTH, expand=True)
+        # Set up the viscosity tab with file selector and plot areas
+        self._setup_viscosity_tab()
 
         # Create the second tab (empty for now)
         self.future_tab = ttk.Frame(self.notebook)
@@ -65,6 +68,425 @@ class RheologyGUI:
         self.status_var.set(f"Output directory: {self.output_directory}")
         status_bar = ttk.Label(self.root, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W)
         status_bar.grid(row=1, column=0, sticky="ew")
+
+    def _setup_viscosity_tab(self):
+        """Set up the viscosity tab with file selection and plot areas."""
+        # Configure the viscosity tab layout
+        self.viscosity_tab.columnconfigure(0, weight=1)
+        self.viscosity_tab.rowconfigure(0, weight=0)  # File selection
+        self.viscosity_tab.rowconfigure(1, weight=1)  # Plot area
+        self.viscosity_tab.rowconfigure(2, weight=0)  # Control buttons
+
+        # Create file selection area
+        file_frame = ttk.Frame(self.viscosity_tab)
+        file_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=5)
+
+        # Setup file selection with the same structure as the file selector
+        self._setup_file_selection(file_frame)
+
+        # Create plot area
+        plot_frame = ttk.LabelFrame(self.viscosity_tab, text="Plot Preview")
+        plot_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
+
+        # Setup three plot areas
+        self._setup_plot_area(plot_frame)
+
+        # Create control buttons
+        button_frame = ttk.Frame(self.viscosity_tab)
+        button_frame.grid(row=2, column=0, sticky="ew", padx=10, pady=5)
+
+        # Setup control buttons
+        self._setup_control_buttons(button_frame)
+
+    def _setup_file_selection(self, parent):
+        """Create the file selection area with directory browsing."""
+        # Directory selection
+        dir_frame = ttk.Frame(parent)
+        dir_frame.pack(fill=tk.X, pady=5)
+
+        self.current_dir = tk.StringVar(value=self.output_directory)
+
+        ttk.Label(dir_frame, text="Directory:").pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Entry(dir_frame, textvariable=self.current_dir, width=60).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(dir_frame, text="Browse...", command=self._browse_directory).pack(side=tk.LEFT)
+
+        # File selection area
+        file_list_frame = ttk.Frame(parent)
+        file_list_frame.pack(fill=tk.X, pady=5)
+
+        file_list_frame.columnconfigure(0, weight=1)
+        file_list_frame.columnconfigure(1, weight=0)
+        file_list_frame.columnconfigure(2, weight=1)
+
+        # Available files list
+        avail_frame = ttk.LabelFrame(file_list_frame, text="Available XLS Files")
+        avail_frame.grid(row=0, column=0, sticky="ew")
+
+        avail_scrollbar = ttk.Scrollbar(avail_frame)
+        avail_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.available_listbox = tk.Listbox(avail_frame, height=5,
+                                            selectmode=tk.EXTENDED,
+                                            yscrollcommand=avail_scrollbar.set)
+        self.available_listbox.pack(fill=tk.BOTH, expand=True)
+        avail_scrollbar.config(command=self.available_listbox.yview)
+
+        # Buttons
+        button_frame = ttk.Frame(file_list_frame)
+        button_frame.grid(row=0, column=1, padx=5)
+
+        ttk.Button(button_frame, text=">>", command=self._add_selected_files).pack(pady=5)
+        ttk.Button(button_frame, text="<<", command=self._remove_selected_files).pack(pady=5)
+
+        # Selected files list
+        selected_frame = ttk.LabelFrame(file_list_frame, text="Selected Files")
+        selected_frame.grid(row=0, column=2, sticky="ew")
+
+        selected_scrollbar = ttk.Scrollbar(selected_frame)
+        selected_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.selected_listbox = tk.Listbox(selected_frame, height=5,
+                                           selectmode=tk.EXTENDED,
+                                           yscrollcommand=selected_scrollbar.set)
+        self.selected_listbox.pack(fill=tk.BOTH, expand=True)
+        selected_scrollbar.config(command=self.selected_listbox.yview)
+
+        # Populate available files
+        self._update_file_list()
+
+        # Initialize selected files list
+        self.selected_files = []
+
+    def _setup_plot_area(self, parent):
+        """Create the plot area with three plots."""
+        # Create a frame with three columns for plots
+        parent.columnconfigure(0, weight=1)
+        parent.columnconfigure(1, weight=1)
+        parent.columnconfigure(2, weight=1)
+        parent.rowconfigure(0, weight=1)
+
+        # Create the plot containers and matplotlib figures
+        self.plot_frames = []
+        self.figures = []
+        self.canvases = []
+
+        titles = ["Forward Sweep", "Reverse Sweep", "Both Sweeps"]
+
+        for i in range(3):
+            frame = ttk.Frame(parent)
+            frame.grid(row=0, column=i, sticky="nsew", padx=5, pady=5)
+            self.plot_frames.append(frame)
+
+            # Create figure and canvas
+            fig = Figure(figsize=(4, 4), dpi=100)
+            ax = fig.add_subplot(111)
+            ax.set_title(titles[i])
+            ax.set_xlabel("Shear rate (1/s)")
+            ax.set_ylabel("Viscosity (Pa.s)")
+            ax.set_xscale("log")
+            ax.set_yscale("log")
+            ax.grid(True)
+            self.figures.append(fig)
+
+            canvas = FigureCanvasTkAgg(fig, master=frame)
+            canvas.draw()
+            canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+            self.canvases.append(canvas)
+
+            # Add save button
+            save_btn = ttk.Button(frame, text="Save Plot",
+                                  command=lambda idx=i: self._save_plot(idx))
+            save_btn.pack(side=tk.BOTTOM, pady=5)
+
+    def _setup_control_buttons(self, parent):
+        """Create the control buttons."""
+        # Status display - define the variable FIRST before using it
+        self.viscosity_status_var = tk.StringVar(value="No files selected")
+        ttk.Label(parent, textvariable=self.viscosity_status_var).pack(side=tk.LEFT, padx=5)
+
+        # Control buttons
+        ttk.Button(parent, text="Exit",
+                   command=self.root.destroy).pack(side=tk.RIGHT, padx=5)
+        ttk.Button(parent, text="Process and Plot",
+                   command=self._process_viscosity_files).pack(side=tk.RIGHT, padx=5)
+        ttk.Button(parent, text="Clear Selection",
+                   command=self._clear_viscosity_selection).pack(side=tk.RIGHT, padx=5)
+
+    def _browse_directory(self):
+        """Open directory browser dialog."""
+        dir_path = filedialog.askdirectory(initialdir=self.current_dir.get())
+        if dir_path:
+            self.current_dir.set(dir_path)
+            self._update_file_list()
+
+    def _update_file_list(self):
+        """Update available files listbox based on current directory."""
+        self.available_listbox.delete(0, tk.END)
+        try:
+            # Get all XLS files in the directory
+            xls_files = [f for f in os.listdir(self.current_dir.get())
+                         if f.lower().endswith('.xls')]
+
+            # Sort them alphabetically
+            xls_files.sort()
+
+            # Add to listbox
+            for file in xls_files:
+                self.available_listbox.insert(tk.END, file)
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Error listing directory: {e}")
+
+    def _add_selected_files(self):
+        """Add files from available list to selected list."""
+        selected_indices = self.available_listbox.curselection()
+        for i in selected_indices:
+            file_name = self.available_listbox.get(i)
+            full_path = os.path.join(self.current_dir.get(), file_name)
+
+            # Add if not already in list
+            if full_path not in self.selected_files:
+                self.selected_files.append(full_path)
+                self.selected_listbox.insert(tk.END, file_name)
+
+        # Update status
+        self._update_viscosity_status()
+
+    def _remove_selected_files(self):
+        """Remove files from selected list."""
+        selected_indices = self.selected_listbox.curselection()
+        # Process in reverse to avoid index shifting
+        for i in sorted(selected_indices, reverse=True):
+            file_name = self.selected_listbox.get(i)
+            # Find the full path in the selected_files list
+            full_path = next((f for f in self.selected_files
+                              if os.path.basename(f) == file_name), None)
+
+            if full_path in self.selected_files:
+                self.selected_files.remove(full_path)
+            self.selected_listbox.delete(i)
+
+        # Update status
+        self._update_viscosity_status()
+
+    def _clear_viscosity_selection(self):
+        """Clear all selected files."""
+        self.selected_files = []
+        self.selected_listbox.delete(0, tk.END)
+        self._update_viscosity_status()
+
+    def _update_viscosity_status(self):
+        """Update status display based on selected files."""
+        count = len(self.selected_files)
+        if count == 0:
+            self.viscosity_status_var.set("No files selected")
+        elif count == 1:
+            self.viscosity_status_var.set("1 file selected")
+        else:
+            self.viscosity_status_var.set(f"{count} files selected")
+
+    def _process_viscosity_files(self):
+        """Process selected viscosity files and update plots."""
+        if not self.selected_files:
+            messagebox.showwarning("No Files", "Please select at least one file to process.")
+            return
+
+        try:
+            # Update status
+            self.viscosity_status_var.set(f"Processing {len(self.selected_files)} files...")
+            self.root.update()
+
+            # Get selected sweep type from radio buttons (you'll need to add this)
+            # For now, assuming all sweep types
+            sweep_type = ["FORWARD", "REVERSE", "BOTH"]
+
+            # Process files using your existing processor
+            if len(self.selected_files) == 1:
+                # Single file processing
+                file_path = self.selected_files[0]
+
+                # Process for each plot type
+                self._update_forward_plot(file_path)
+                self._update_reverse_plot(file_path)
+                self._update_both_plot(file_path)
+
+            else:
+                # Multiple file processing
+                self._update_forward_plot(self.selected_files)
+                self._update_reverse_plot(self.selected_files)
+                self._update_both_plot(self.selected_files)
+
+            # Update status
+            self.viscosity_status_var.set(f"Processed {len(self.selected_files)} files")
+
+        except Exception as e:
+            messagebox.showerror("Processing Error", f"Error processing files: {e}")
+            self.viscosity_status_var.set("Error processing files")
+
+    def _update_forward_plot(self, file_paths):
+        """Update the forward sweep plot."""
+        if not isinstance(file_paths, list):
+            file_paths = [file_paths]
+
+        # Clear the plot
+        ax = self.figures[0].axes[0]
+        ax.clear()
+
+        # Set plot properties
+        ax.set_title("Forward Sweep")
+        ax.set_xlabel("Shear rate (1/s)")
+        ax.set_ylabel("Viscosity (Pa.s)")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.grid(True)
+
+        # Process data and plot
+        # Use your processor.process_viscosity_single or process_viscosity_multiple
+        try:
+            if len(file_paths) == 1:
+                df, _, _ = self.processor.process_viscosity_single(file_paths[0], "FORWARD")
+                forward_data = df[df["Sweep"] == "FORWARD"]
+
+                # Plot the data
+                ax.scatter(forward_data["Shear rate"], forward_data["Viscosity"],
+                           label=os.path.basename(file_paths[0]), color='blue')
+            else:
+                # Multiple files
+                for i, file_path in enumerate(file_paths):
+                    df, _, _ = self.processor.process_viscosity_single(file_path, "FORWARD")
+                    forward_data = df[df["Sweep"] == "FORWARD"]
+
+                    color = plt.cm.tab10(i % 10)
+                    ax.scatter(forward_data["Shear rate"], forward_data["Viscosity"],
+                               label=os.path.basename(file_path), color=color)
+
+            ax.legend()
+            self.canvases[0].draw()
+
+        except Exception as e:
+            print(f"Error updating forward plot: {e}")
+
+    def _update_reverse_plot(self, file_paths):
+        """Update the reverse sweep plot."""
+        if not isinstance(file_paths, list):
+            file_paths = [file_paths]
+
+        # Clear the plot
+        ax = self.figures[1].axes[0]
+        ax.clear()
+
+        # Set plot properties
+        ax.set_title("Reverse Sweep")
+        ax.set_xlabel("Shear rate (1/s)")
+        ax.set_ylabel("Viscosity (Pa.s)")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.grid(True)
+
+        # Process data and plot
+        try:
+            if len(file_paths) == 1:
+                df, _, _ = self.processor.process_viscosity_single(file_paths[0], "REVERSE")
+                reverse_data = df[df["Sweep"] == "REVERSE"]
+
+                # Plot the data
+                ax.scatter(reverse_data["Shear rate"], reverse_data["Viscosity"],
+                           label=os.path.basename(file_paths[0]), color='red')
+            else:
+                # Multiple files
+                for i, file_path in enumerate(file_paths):
+                    df, _, _ = self.processor.process_viscosity_single(file_path, "REVERSE")
+                    reverse_data = df[df["Sweep"] == "REVERSE"]
+
+                    color = plt.cm.tab10(i % 10)
+                    ax.scatter(reverse_data["Shear rate"], reverse_data["Viscosity"],
+                               label=os.path.basename(file_path), color=color)
+
+            ax.legend()
+            self.canvases[1].draw()
+
+        except Exception as e:
+            print(f"Error updating reverse plot: {e}")
+
+    def _update_both_plot(self, file_paths):
+        """Update the plot with both sweeps."""
+        if not isinstance(file_paths, list):
+            file_paths = [file_paths]
+
+        # Clear the plot
+        ax = self.figures[2].axes[0]
+        ax.clear()
+
+        # Set plot properties
+        ax.set_title("Both Sweeps")
+        ax.set_xlabel("Shear rate (1/s)")
+        ax.set_ylabel("Viscosity (Pa.s)")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.grid(True)
+
+        # Process data and plot
+        try:
+            if len(file_paths) == 1:
+                df, _, _ = self.processor.process_viscosity_single(file_paths[0], ["FORWARD", "REVERSE"])
+
+                forward_data = df[df["Sweep"] == "FORWARD"]
+                reverse_data = df[df["Sweep"] == "REVERSE"]
+
+                # Plot both sweep types
+                ax.scatter(forward_data["Shear rate"], forward_data["Viscosity"],
+                           label="Forward", color='blue', marker='o')
+                ax.scatter(reverse_data["Shear rate"], reverse_data["Viscosity"],
+                           label="Reverse", color='red', marker='s')
+            else:
+                # For multiple files, use different colors for each file
+                for i, file_path in enumerate(file_paths):
+                    df, _, _ = self.processor.process_viscosity_single(file_path, ["FORWARD", "REVERSE"])
+
+                    forward_data = df[df["Sweep"] == "FORWARD"]
+                    reverse_data = df[df["Sweep"] == "REVERSE"]
+
+                    file_name = os.path.basename(file_path)
+                    color = plt.cm.tab10(i % 10)
+
+                    ax.scatter(forward_data["Shear rate"], forward_data["Viscosity"],
+                               label=f"{file_name} (Forward)", color=color, marker='o')
+                    ax.scatter(reverse_data["Shear rate"], reverse_data["Viscosity"],
+                               label=f"{file_name} (Reverse)", color=color, marker='s')
+
+            ax.legend()
+            self.canvases[2].draw()
+
+        except Exception as e:
+            print(f"Error updating both-sweep plot: {e}")
+
+    def _save_plot(self, plot_index):
+        """Save the specified plot to a file."""
+        # Define plot types for filename
+        plot_types = ["forward", "reverse", "both"]
+
+        # Create default filename
+        default_name = f"viscosity_{plot_types[plot_index]}.png"
+
+        # Ask user where to save the file
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".png",
+            filetypes=[("PNG files", "*.png"), ("PDF files", "*.pdf"), ("All files", "*.*")],
+            initialfile=default_name,
+            initialdir=self.output_directory
+        )
+
+        if file_path:
+            try:
+                # Save the figure
+                self.figures[plot_index].savefig(file_path, dpi=300, bbox_inches='tight')
+                self.viscosity_status_var.set(f"Plot saved to {os.path.basename(file_path)}")
+
+                # Ask if user wants to open the file
+                if messagebox.askyesno("Open File", "Would you like to open the saved plot?"):
+                    self.open_file(file_path)
+            except Exception as e:
+                messagebox.showerror("Save Error", f"Error saving plot: {e}")
 
     def open_file(self, file_path):
         """Open a file with the default application."""
