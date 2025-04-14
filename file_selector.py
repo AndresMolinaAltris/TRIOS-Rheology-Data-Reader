@@ -6,7 +6,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
 
-class ViscosityAnalyzer(ttk.Frame):
+class FileSelector(ttk.Frame):
     """A component that combines file selection and plot display."""
 
     def __init__(self, parent, initial_dir=None):
