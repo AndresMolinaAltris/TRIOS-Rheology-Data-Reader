@@ -54,14 +54,12 @@ class RheologyGUI:
         # Set up the viscosity tab with file selector and plot areas
         self._setup_viscosity_tab()
 
-        # Create the second tab (empty for now)
-        self.future_tab = ttk.Frame(self.notebook)
-        self.notebook.add(self.future_tab, text="Future Implementation")
+        # Add the derivative tab
+        self.derivative_tab = ttk.Frame(self.notebook)
+        self.notebook.add(self.derivative_tab, text="Viscosity Derivative")
 
-        # Add a simple label to the second tab
-        ttk.Label(self.future_tab,
-                  text="This tab is reserved for future implementation.",
-                  font=("Arial", 12)).pack(expand=True)
+        # Set up the derivative tab
+        self._setup_derivative_tab()
 
         # Status bar at the bottom of the main window
         self.status_var = tk.StringVar()
@@ -295,17 +293,22 @@ class RheologyGUI:
             self.viscosity_status_var.set(f"Processing {len(self.selected_files)} files...")
             self.root.update()
 
-            # Process files for forward and reverse plots only
+            # Process files for forward and reverse plots
             self._update_forward_plot(self.selected_files)
             self._update_reverse_plot(self.selected_files)
-            # Removed call to _update_both_plot()
+
+            # Now update the derivative plots
+            self._update_forward_derivative(self.selected_files)
+            self._update_reverse_derivative(self.selected_files)
 
             # Update status
             self.viscosity_status_var.set(f"Processed {len(self.selected_files)} files")
+            self.derivative_status_var.set(f"Processed {len(self.selected_files)} files")
 
         except Exception as e:
             messagebox.showerror("Processing Error", f"Error processing files: {e}")
             self.viscosity_status_var.set("Error processing files")
+            self.derivative_status_var.set("Error processing derivatives")
 
     def _update_forward_plot(self, file_paths):
         """Update the forward sweep plot."""
@@ -434,3 +437,280 @@ class RheologyGUI:
                 subprocess.run(['xdg-open', file_path], check=True)
         except Exception as e:
             messagebox.showerror("Error", f"Failed to open file: {str(e)}")
+
+    def _setup_derivative_tab(self):
+        """Set up the derivative tab with two plots for forward and reverse derivatives."""
+        # Configure the derivative tab layout
+        self.derivative_tab.columnconfigure(0, weight=1)
+        self.derivative_tab.rowconfigure(0, weight=1)  # Plot area
+        self.derivative_tab.rowconfigure(1, weight=0)  # Control buttons
+
+        # Create plot area
+        plot_frame = ttk.LabelFrame(self.derivative_tab, text="Derivative Plot Preview")
+        plot_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=5)
+
+        # Configure the plot frame
+        plot_frame.columnconfigure(0, weight=1)
+        plot_frame.columnconfigure(1, weight=1)
+        plot_frame.rowconfigure(0, weight=1)
+
+        # Create the plot containers and matplotlib figures
+        self.derivative_frames = []
+        self.derivative_figures = []
+        self.derivative_canvases = []
+
+        titles = ["Forward Sweep Derivative", "Reverse Sweep Derivative"]
+
+        for i in range(2):
+            frame = ttk.Frame(plot_frame)
+            frame.grid(row=0, column=i, sticky="nsew", padx=5, pady=5)
+            self.derivative_frames.append(frame)
+
+            # Create figure and canvas
+            fig = Figure(figsize=(4, 4), dpi=100)
+            ax = fig.add_subplot(111)
+            ax.set_title(titles[i])
+            ax.set_xlabel("Shear rate (1/s)")
+            ax.set_ylabel("dη/dγ̇ (Pa.s²)")
+            ax.set_xscale("log")  # X-axis is still logarithmic
+            ax.set_yscale("linear")  # Y-axis is linear as requested
+            ax.grid(True)
+            self.derivative_figures.append(fig)
+
+            canvas = FigureCanvasTkAgg(fig, master=frame)
+            canvas.draw()
+            canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+            self.derivative_canvases.append(canvas)
+
+            # Add save button
+            save_btn = ttk.Button(frame, text="Save Plot",
+                                  command=lambda idx=i: self._save_derivative_plot(idx))
+            save_btn.pack(side=tk.BOTTOM, pady=5)
+
+        # Create button frame with status info
+        button_frame = ttk.Frame(self.derivative_tab)
+        button_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=5)
+
+        # Add status label
+        self.derivative_status_var = tk.StringVar(value="No data processed yet")
+        ttk.Label(button_frame, textvariable=self.derivative_status_var).pack(side=tk.LEFT, padx=5)
+
+    def _calculate_derivative(self, x, y):
+        """
+        Calculate derivative d(log y)/d(log x) for given data points.
+
+        Args:
+            x: Array of x values (shear rate)
+            y: Array of y values (viscosity)
+
+        Returns:
+            Arrays of original x values and log-log derivative values
+        """
+        try:
+            # Print raw data types for debugging
+            print(f"x type: {type(x)}, y type: {type(y)}")
+
+            # Convert inputs to numpy arrays if they aren't already
+            x_array = np.asarray(x, dtype=float)
+            y_array = np.asarray(y, dtype=float)
+
+            # Sort data by x values
+            sorted_indices = np.argsort(x_array)
+            x_sorted = x_array[sorted_indices]
+            y_sorted = y_array[sorted_indices]
+
+            # Check for non-positive values
+            x_positive = x_sorted > 0
+            y_positive = y_sorted > 0
+
+            if not np.all(x_positive) or not np.all(y_positive):
+                print(f"Warning: Found non-positive values in data.")
+                print(f"  Non-positive x values: {np.sum(~x_positive)}")
+                print(f"  Non-positive y values: {np.sum(~y_positive)}")
+
+                # Filter out non-positive values
+                valid_indices = x_positive & y_positive
+                x_sorted = x_sorted[valid_indices]
+                y_sorted = y_sorted[valid_indices]
+
+                if len(x_sorted) < 2:
+                    print("Not enough valid data points after filtering")
+                    return np.array([]), np.array([])
+
+            # Convert to log space
+            log_x = np.log10(x_sorted)
+            log_y = np.log10(y_sorted)
+
+            # Calculate numerical derivative in log-log space
+            dlog_y_dlog_x = np.gradient(log_y, log_x)
+
+            # Debug information
+            print(f"Log-log derivative calculation successful:")
+            print(f"  Number of points: {len(x_sorted)}")
+            print(f"  x range: {min(x_sorted)} to {max(x_sorted)}")
+            print(f"  y range: {min(y_sorted)} to {max(y_sorted)}")
+            print(f"  Derivative range: {min(dlog_y_dlog_x)} to {max(dlog_y_dlog_x)}")
+
+            return x_sorted, dlog_y_dlog_x
+        except Exception as e:
+            print(f"Error calculating log-log derivative: {e}")
+            import traceback
+            traceback.print_exc()
+            # Return empty arrays if calculation fails
+            return np.array([]), np.array([])
+
+    def _update_forward_derivative(self, file_paths):
+        """Update the forward sweep derivative plot."""
+        if not isinstance(file_paths, list):
+            file_paths = [file_paths]
+
+        # Clear the plot
+        ax = self.derivative_figures[0].axes[0]
+        ax.clear()
+
+        # Set plot properties
+        ax.set_title("Forward Sweep Derivative")
+        ax.set_xlabel("Shear rate (1/s)")
+        ax.set_ylabel("dη/dγ̇ (Pa.s²)")
+        ax.set_xscale("log")
+        ax.set_yscale("linear")
+        ax.grid(True)
+
+        # Process data and plot
+        try:
+            if len(file_paths) == 1:
+                df, _, _ = self.processor.process_viscosity_single(file_paths[0], "FORWARD")
+                forward_data = df[df["Sweep"] == "FORWARD"]
+
+                # Extract data
+                x = forward_data["Shear rate"].values
+                y = forward_data["Viscosity"].values
+
+                # Calculate derivative
+                x_sorted, dy_dx = self._calculate_derivative(x, y)
+
+                # Check if calculation was successful
+                if len(x_sorted) > 0:
+                    # Plot the derivative
+                    label = os.path.basename(file_paths[0]).split('_')[0]
+                    ax.plot(x_sorted, dy_dx, 'o-', label=label, color='blue')
+                else:
+                    self.derivative_status_var.set("Error calculating derivative")
+            else:
+                # Multiple files
+                for i, file_path in enumerate(file_paths):
+                    df, _, _ = self.processor.process_viscosity_single(file_path, "FORWARD")
+                    forward_data = df[df["Sweep"] == "FORWARD"]
+
+                    # Extract data
+                    x = forward_data["Shear rate"].values
+                    y = forward_data["Viscosity"].values
+
+                    # Calculate derivative
+                    x_sorted, dy_dx = self._calculate_derivative(x, y)
+
+                    # Check if calculation was successful
+                    if len(x_sorted) > 0:
+                        # Plot the derivative
+                        color = plt.cm.tab10(i % 10)
+                        label = os.path.basename(file_path).split('_')[0]
+                        ax.plot(x_sorted, dy_dx, 'o-', label=label, color=color)
+
+            ax.legend()
+            self.derivative_canvases[0].draw()
+
+        except Exception as e:
+            print(f"Error updating forward derivative plot: {e}")
+            self.derivative_status_var.set("Error updating forward derivative")
+
+    def _update_reverse_derivative(self, file_paths):
+        """Update the reverse sweep derivative plot."""
+        if not isinstance(file_paths, list):
+            file_paths = [file_paths]
+
+        # Clear the plot
+        ax = self.derivative_figures[1].axes[0]
+        ax.clear()
+
+        # Set plot properties
+        ax.set_title("Reverse Sweep Derivative")
+        ax.set_xlabel("Shear rate (1/s)")
+        ax.set_ylabel("dη/dγ̇ (Pa.s²)")
+        ax.set_xscale("log")
+        ax.set_yscale("linear")
+        ax.grid(True)
+
+        # Process data and plot
+        try:
+            if len(file_paths) == 1:
+                df, _, _ = self.processor.process_viscosity_single(file_paths[0], "REVERSE")
+                reverse_data = df[df["Sweep"] == "REVERSE"]
+
+                # Extract data
+                x = reverse_data["Shear rate"].values
+                y = reverse_data["Viscosity"].values
+
+                # Calculate derivative
+                x_sorted, dy_dx = self._calculate_derivative(x, y)
+
+                # Check if calculation was successful
+                if len(x_sorted) > 0:
+                    # Plot the derivative
+                    label = os.path.basename(file_paths[0]).split('_')[0]
+                    ax.plot(x_sorted, dy_dx, 'o-', label=label, color='red')
+                else:
+                    self.derivative_status_var.set("Error calculating derivative")
+            else:
+                # Multiple files
+                for i, file_path in enumerate(file_paths):
+                    df, _, _ = self.processor.process_viscosity_single(file_path, "REVERSE")
+                    reverse_data = df[df["Sweep"] == "REVERSE"]
+
+                    # Extract data
+                    x = reverse_data["Shear rate"].values
+                    y = reverse_data["Viscosity"].values
+
+                    # Calculate derivative
+                    x_sorted, dy_dx = self._calculate_derivative(x, y)
+
+                    # Check if calculation was successful
+                    if len(x_sorted) > 0:
+                        # Plot the derivative
+                        color = plt.cm.tab10(i % 10)
+                        label = os.path.basename(file_path).split('_')[0]
+                        ax.plot(x_sorted, dy_dx, 'o-', label=label, color=color)
+
+            ax.legend()
+            self.derivative_canvases[1].draw()
+
+        except Exception as e:
+            print(f"Error updating reverse derivative plot: {e}")
+            self.derivative_status_var.set("Error updating reverse derivative")
+
+    def _save_derivative_plot(self, plot_index):
+        """Save the specified derivative plot to a file."""
+        # Define plot types for filename
+        plot_types = ["forward_derivative", "reverse_derivative"]
+
+        # Create default filename
+        default_name = f"viscosity_{plot_types[plot_index]}.png"
+
+        # Ask user where to save the file
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".png",
+            filetypes=[("PNG files", "*.png"), ("PDF files", "*.pdf"), ("All files", "*.*")],
+            initialfile=default_name,
+            initialdir=self.output_directory
+        )
+
+        if file_path:
+            try:
+                # Save the figure
+                self.derivative_figures[plot_index].savefig(file_path, dpi=300, bbox_inches='tight')
+                self.derivative_status_var.set(f"Plot saved to {os.path.basename(file_path)}")
+
+                # Ask if user wants to open the file
+                if messagebox.askyesno("Open File", "Would you like to open the saved plot?"):
+                    self.open_file(file_path)
+            except Exception as e:
+                messagebox.showerror("Save Error", f"Error saving plot: {e}")
