@@ -271,16 +271,3 @@ class FileSelector(ttk.Frame):
                 self.status_var.set(f"Plot saved to {file_path}")
             except Exception as e:
                 tk.messagebox.showerror("Save Error", f"Error saving plot: {e}")
-
-
-# For testing the component independently
-if __name__ == "__main__":
-    root = tk.Tk()
-    root.title("Viscosity Analyzer Test")
-    root.geometry("1000x800")
-
-    # Create and pack the analyzer
-    analyzer = ViscosityAnalyzer(root)
-    analyzer.pack(fill=tk.BOTH, expand=True)
-
-    root.mainloop()
