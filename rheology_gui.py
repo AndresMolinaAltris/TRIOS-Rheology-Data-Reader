@@ -158,11 +158,10 @@ class RheologyGUI:
         self.selected_files = []
 
     def _setup_plot_area(self, parent):
-        """Create the plot area with three plots."""
-        # Create a frame with three columns for plots
+        """Create the plot area with two plots (Forward and Reverse)."""
+        # Create a frame with two columns for plots
         parent.columnconfigure(0, weight=1)
         parent.columnconfigure(1, weight=1)
-        parent.columnconfigure(2, weight=1)
         parent.rowconfigure(0, weight=1)
 
         # Create the plot containers and matplotlib figures
@@ -170,9 +169,9 @@ class RheologyGUI:
         self.figures = []
         self.canvases = []
 
-        titles = ["Forward Sweep", "Reverse Sweep", "Both Sweeps"]
+        titles = ["Forward Sweep", "Reverse Sweep"]  # Removed "Both Sweeps"
 
-        for i in range(3):
+        for i in range(2):  # Changed from range(3) to range(2)
             frame = ttk.Frame(parent)
             frame.grid(row=0, column=i, sticky="nsew", padx=5, pady=5)
             self.plot_frames.append(frame)
@@ -296,25 +295,10 @@ class RheologyGUI:
             self.viscosity_status_var.set(f"Processing {len(self.selected_files)} files...")
             self.root.update()
 
-            # Get selected sweep type from radio buttons (you'll need to add this)
-            # For now, assuming all sweep types
-            sweep_type = ["FORWARD", "REVERSE", "BOTH"]
-
-            # Process files using your existing processor
-            if len(self.selected_files) == 1:
-                # Single file processing
-                file_path = self.selected_files[0]
-
-                # Process for each plot type
-                self._update_forward_plot(file_path)
-                self._update_reverse_plot(file_path)
-                self._update_both_plot(file_path)
-
-            else:
-                # Multiple file processing
-                self._update_forward_plot(self.selected_files)
-                self._update_reverse_plot(self.selected_files)
-                self._update_both_plot(self.selected_files)
+            # Process files for forward and reverse plots only
+            self._update_forward_plot(self.selected_files)
+            self._update_reverse_plot(self.selected_files)
+            # Removed call to _update_both_plot()
 
             # Update status
             self.viscosity_status_var.set(f"Processed {len(self.selected_files)} files")
@@ -341,15 +325,15 @@ class RheologyGUI:
         ax.grid(True)
 
         # Process data and plot
-        # Use your processor.process_viscosity_single or process_viscosity_multiple
         try:
             if len(file_paths) == 1:
                 df, _, _ = self.processor.process_viscosity_single(file_paths[0], "FORWARD")
                 forward_data = df[df["Sweep"] == "FORWARD"]
 
                 # Plot the data
+                label = os.path.basename(file_paths[0]).split('_')[0]
                 ax.scatter(forward_data["Shear rate"], forward_data["Viscosity"],
-                           label=os.path.basename(file_paths[0]), color='blue')
+                           label=label, color='blue')
             else:
                 # Multiple files
                 for i, file_path in enumerate(file_paths):
@@ -357,8 +341,10 @@ class RheologyGUI:
                     forward_data = df[df["Sweep"] == "FORWARD"]
 
                     color = plt.cm.tab10(i % 10)
+
+                    label = os.path.basename(file_path).split('_')[0]
                     ax.scatter(forward_data["Shear rate"], forward_data["Viscosity"],
-                               label=os.path.basename(file_path), color=color)
+                               label=label, color=color)
 
             ax.legend()
             self.canvases[0].draw()
@@ -390,8 +376,9 @@ class RheologyGUI:
                 reverse_data = df[df["Sweep"] == "REVERSE"]
 
                 # Plot the data
+                label = os.path.basename(file_paths[0]).split('_')[0]
                 ax.scatter(reverse_data["Shear rate"], reverse_data["Viscosity"],
-                           label=os.path.basename(file_paths[0]), color='red')
+                           label=label, color='red')
             else:
                 # Multiple files
                 for i, file_path in enumerate(file_paths):
@@ -399,8 +386,9 @@ class RheologyGUI:
                     reverse_data = df[df["Sweep"] == "REVERSE"]
 
                     color = plt.cm.tab10(i % 10)
+                    label = os.path.basename(file_path).split('_')[0]
                     ax.scatter(reverse_data["Shear rate"], reverse_data["Viscosity"],
-                               label=os.path.basename(file_path), color=color)
+                               label=label, color=color)
 
             ax.legend()
             self.canvases[1].draw()
@@ -408,62 +396,9 @@ class RheologyGUI:
         except Exception as e:
             print(f"Error updating reverse plot: {e}")
 
-    def _update_both_plot(self, file_paths):
-        """Update the plot with both sweeps."""
-        if not isinstance(file_paths, list):
-            file_paths = [file_paths]
-
-        # Clear the plot
-        ax = self.figures[2].axes[0]
-        ax.clear()
-
-        # Set plot properties
-        ax.set_title("Both Sweeps")
-        ax.set_xlabel("Shear rate (1/s)")
-        ax.set_ylabel("Viscosity (Pa.s)")
-        ax.set_xscale("log")
-        ax.set_yscale("log")
-        ax.grid(True)
-
-        # Process data and plot
-        try:
-            if len(file_paths) == 1:
-                df, _, _ = self.processor.process_viscosity_single(file_paths[0], ["FORWARD", "REVERSE"])
-
-                forward_data = df[df["Sweep"] == "FORWARD"]
-                reverse_data = df[df["Sweep"] == "REVERSE"]
-
-                # Plot both sweep types
-                ax.scatter(forward_data["Shear rate"], forward_data["Viscosity"],
-                           label="Forward", color='blue', marker='o')
-                ax.scatter(reverse_data["Shear rate"], reverse_data["Viscosity"],
-                           label="Reverse", color='red', marker='s')
-            else:
-                # For multiple files, use different colors for each file
-                for i, file_path in enumerate(file_paths):
-                    df, _, _ = self.processor.process_viscosity_single(file_path, ["FORWARD", "REVERSE"])
-
-                    forward_data = df[df["Sweep"] == "FORWARD"]
-                    reverse_data = df[df["Sweep"] == "REVERSE"]
-
-                    file_name = os.path.basename(file_path)
-                    color = plt.cm.tab10(i % 10)
-
-                    ax.scatter(forward_data["Shear rate"], forward_data["Viscosity"],
-                               label=f"{file_name} (Forward)", color=color, marker='o')
-                    ax.scatter(reverse_data["Shear rate"], reverse_data["Viscosity"],
-                               label=f"{file_name} (Reverse)", color=color, marker='s')
-
-            ax.legend()
-            self.canvases[2].draw()
-
-        except Exception as e:
-            print(f"Error updating both-sweep plot: {e}")
-
     def _save_plot(self, plot_index):
         """Save the specified plot to a file."""
-        # Define plot types for filename
-        plot_types = ["forward", "reverse", "both"]
+        plot_types = ["forward", "reverse"]  # Removed "both"
 
         # Create default filename
         default_name = f"viscosity_{plot_types[plot_index]}.png"

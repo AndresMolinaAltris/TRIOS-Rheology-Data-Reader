@@ -107,10 +107,9 @@ class FileSelector(ttk.Frame):
 
     def _create_plot_area(self):
         """Create the three plot areas."""
-        # Configure the plot frame for three plots
+        # Configure the plot frame for two plots
         self.plot_frame.columnconfigure(0, weight=1)
         self.plot_frame.columnconfigure(1, weight=1)
-        self.plot_frame.columnconfigure(2, weight=1)
         self.plot_frame.rowconfigure(0, weight=1)
 
         # Create sub-frames for each plot
@@ -118,9 +117,9 @@ class FileSelector(ttk.Frame):
         self.figures = []
         self.canvases = []
 
-        plot_titles = ["Forward Sweep", "Reverse Sweep", "Both Sweeps"]
+        plot_titles = ["Forward Sweep", "Reverse Sweep"]  # Removed "Both Sweeps"
 
-        for i in range(3):
+        for i in range(2):  # Changed from range(3) to range(2)
             # Create a frame for this plot
             frame = ttk.Frame(self.plot_frame)
             frame.grid(row=0, column=i, sticky="nsew", padx=5, pady=5)
@@ -272,16 +271,3 @@ class FileSelector(ttk.Frame):
                 self.status_var.set(f"Plot saved to {file_path}")
             except Exception as e:
                 tk.messagebox.showerror("Save Error", f"Error saving plot: {e}")
-
-
-# For testing the component independently
-if __name__ == "__main__":
-    root = tk.Tk()
-    root.title("Viscosity Analyzer Test")
-    root.geometry("1000x800")
-
-    # Create and pack the analyzer
-    analyzer = ViscosityAnalyzer(root)
-    analyzer.pack(fill=tk.BOTH, expand=True)
-
-    root.mainloop()
