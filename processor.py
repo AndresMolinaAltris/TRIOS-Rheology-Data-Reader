@@ -206,6 +206,77 @@ class DataProcessor:
 
         return dataframes, dataset_names, fig_name, full_output_path
 
+    def process_combined_viscosity_single(self, file_path):
+        """
+        Process a single viscosity data file for combined forward/reverse plot.
+
+        Parameters:
+        file_path (str): Path to the viscosity data file.
+
+        Returns:
+        tuple: DataFrame containing processed data, filename of the generated plot, full path of the output file.
+        """
+        # Load data
+        df = load_viscosity_stress_data(file_path)
+
+        # Generate filename
+        fig_name = os.path.splitext(os.path.basename(file_path))[0]
+        fig_name += "-COMBINED.png"
+
+        # Full path for output file
+        full_output_path = os.path.join(self.output_directory, fig_name)
+
+        # Name of the dataset
+        name = re.split('[-_]', fig_name)[0]
+
+        # Plot data
+        plot_combined_viscosity_data(
+            df=df,
+            fig_name=fig_name,
+            export_path=self.output_directory,
+            datasets=name
+        )
+
+        return df, fig_name, full_output_path
+
+    def process_combined_viscosity_multiple(self, file_paths):
+        """
+        Process multiple viscosity data files for combined forward/reverse plot.
+
+        Parameters:
+        file_paths (list of str): List of paths to viscosity data files.
+
+        Returns:
+        tuple: List of DataFrames, list of dataset names, filename of the generated plot, full path of the output file.
+        """
+        # Load all datasets
+        dataframes = []
+        dataset_names = []
+
+        for file_path in file_paths:
+            df = load_viscosity_stress_data(file_path)
+            dataframes.append(df)
+
+            # Use filename as dataset name
+            name = os.path.splitext(os.path.basename(file_path))[0].split('_')[0]
+            dataset_names.append(name)
+
+        # Generate filename
+        fig_name = "comparison-COMBINED.png"
+
+        # Full path for output file
+        full_output_path = os.path.join(self.output_directory, fig_name)
+
+        # Plot data
+        plot_combined_viscosity_data(
+            df=dataframes,
+            fig_name=fig_name,
+            export_path=self.output_directory,
+            datasets=dataset_names
+        )
+
+        return dataframes, dataset_names, fig_name, full_output_path
+
     # ================ ANALYSIS METHODS ================
 
     def calculate_thixotropy_metrics(self, df):

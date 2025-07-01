@@ -235,3 +235,100 @@ def plot_thixotropy_data(df_list, fig_name, export_path, datasets=None, colors=N
     os.makedirs(export_path, exist_ok=True)
     plt.savefig(os.path.join(export_path, fig_name), dpi=300, bbox_inches="tight")
     plt.close()
+
+
+def plot_combined_viscosity_data(df, fig_name, export_path, datasets=None, colors=None, markers=None):
+    """
+    Plots forward and reverse viscosity sweeps on a single plot for one or multiple datasets.
+
+    Parameters:
+    df (pd.DataFrame or list): DataFrame(s) containing sweep data.
+    fig_name (str): Filename for the exported plot.
+    export_path (str): Directory where the plot will be saved.
+    datasets (list): Names for each dataset. Default: "Dataset" or "Dataset 1", "Dataset 2", etc.
+    colors (list): Not used - fixed color scheme (blue for forward, red for reverse).
+    markers (list): Not used - fixed markers (circles for forward, triangles for reverse).
+    """
+    x_col, y_col = "Shear rate", "Viscosity"
+
+    # Convert single DataFrame to list
+    if not isinstance(df, list):
+        df = [df]
+
+    # Set default dataset names
+    if datasets is None:
+        datasets = ["Dataset"] if len(df) == 1 else [f"Dataset {i + 1}" for i in range(len(df))]
+
+    # Fixed color and marker scheme
+    forward_color = 'blue'
+    reverse_color = 'red'
+    forward_marker = 'o'  # circles
+    reverse_marker = '^'  # triangles
+
+    # Create plot
+    plt.figure(figsize=(10, 8))
+
+    # Added this to pass the dataset as an entire string and not a character
+    if isinstance(datasets, str):
+        datasets = [datasets.split('_')[0]]  # Take first part before underscore
+    elif datasets is not None:
+        datasets = [d.split('_')[0] for d in datasets]  # Process each dataset name
+
+    # Plot each dataset
+    for i, (data, dataset_name) in enumerate(zip(df, datasets)):
+        # Check available sweeps
+        available_sweeps = data["Sweep"].unique()
+
+        # Plot forward sweep if available
+        if "FORWARD" in available_sweeps:
+            forward_data = data[data["Sweep"] == "FORWARD"]
+
+            if len(df) == 1:
+                label = "Forward Sweep"
+            else:
+                label = f"{dataset_name} - Forward"
+
+            plt.scatter(
+                forward_data[x_col],
+                forward_data[y_col],
+                label=label,
+                color=forward_color,
+                marker=forward_marker,
+                alpha=0.7,
+                s=50
+            )
+
+        # Plot reverse sweep if available
+        if "REVERSE" in available_sweeps:
+            reverse_data = data[data["Sweep"] == "REVERSE"]
+
+            if len(df) == 1:
+                label = "Reverse Sweep"
+            else:
+                label = f"{dataset_name} - Reverse"
+
+            plt.scatter(
+                reverse_data[x_col],
+                reverse_data[y_col],
+                label=label,
+                color=reverse_color,
+                marker=reverse_marker,
+                alpha=0.7,
+                s=50
+            )
+
+    # Set plot attributes
+    plt.xlabel(f"{x_col} (1/s)")
+    plt.ylabel(f"{y_col} (Pa.s)")
+    plt.xscale("log")
+    plt.yscale("log")
+    plt.grid(True, which="both", linestyle="--", linewidth=0.5)
+    plt.title("Combined Forward and Reverse Sweeps")
+
+    # Add legend
+    plt.legend(loc='best', framealpha=0.7)
+
+    # Save the figure
+    os.makedirs(export_path, exist_ok=True)
+    plt.savefig(os.path.join(export_path, fig_name), dpi=300, bbox_inches="tight")
+    plt.close()

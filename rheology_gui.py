@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-# Your other imports
+# Other imports
 from plotting import *
 from processor import DataProcessor
 
@@ -66,6 +66,13 @@ class RheologyGUI:
         self.status_var.set(f"Output directory: {self.output_directory}")
         status_bar = ttk.Label(self.root, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W)
         status_bar.grid(row=1, column=0, sticky="ew")
+
+        # Add the combined sweeps tab
+        self.combined_tab = ttk.Frame(self.notebook)
+        self.notebook.add(self.combined_tab, text="Combined Sweeps")
+
+        # Set up the combined tab
+        self._setup_combined_tab()
 
     def _setup_viscosity_tab(self):
         """Set up the viscosity tab with file selection and plot areas."""
@@ -209,6 +216,53 @@ class RheologyGUI:
         ttk.Button(parent, text="Clear Selection",
                    command=self._clear_viscosity_selection).pack(side=tk.RIGHT, padx=5)
 
+    def _setup_combined_tab(self):
+        """Set up the combined sweeps tab with single plot for both forward and reverse."""
+        # Configure the combined tab layout
+        self.combined_tab.columnconfigure(0, weight=1)
+        self.combined_tab.rowconfigure(0, weight=1)  # Plot area
+        self.combined_tab.rowconfigure(1, weight=0)  # Control buttons
+
+        # Create plot area
+        plot_frame = ttk.LabelFrame(self.combined_tab, text="Combined Sweeps Plot Preview")
+        plot_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=5)
+
+        # Configure the plot frame for single plot - FIX THE LAYOUT HERE
+        plot_frame.columnconfigure(0, weight=1)
+        plot_frame.rowconfigure(0, weight=1)  # Canvas area
+        plot_frame.rowconfigure(1, weight=0)  # Button area
+
+        # Create the plot container
+        canvas_frame = ttk.Frame(plot_frame)
+        canvas_frame.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+
+        # Create figure and canvas
+        self.combined_figure = Figure(figsize=(8, 6), dpi=100)
+        ax = self.combined_figure.add_subplot(111)
+        ax.set_title("Combined Forward and Reverse Sweeps")
+        ax.set_xlabel("Shear rate (1/s)")
+        ax.set_ylabel("Viscosity (Pa.s)")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.grid(True)
+
+        self.combined_canvas = FigureCanvasTkAgg(self.combined_figure, master=canvas_frame)
+        self.combined_canvas.draw()
+        self.combined_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+        # Add save button - MOVE THIS TO THE PLOT_FRAME LEVEL
+        save_btn = ttk.Button(plot_frame, text="Save Plot",
+                              command=self._save_combined_plot)
+        save_btn.grid(row=1, column=0, pady=5)
+
+        # Create button frame with status info
+        button_frame = ttk.Frame(self.combined_tab)
+        button_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=5)
+
+        # Add status label
+        self.combined_status_var = tk.StringVar(value="No data processed yet")
+        ttk.Label(button_frame, textvariable=self.combined_status_var).pack(side=tk.LEFT, padx=5)
+
     def _browse_directory(self):
         """Open directory browser dialog."""
         dir_path = filedialog.askdirectory(initialdir=self.current_dir.get())
@@ -282,6 +336,74 @@ class RheologyGUI:
         else:
             self.viscosity_status_var.set(f"{count} files selected")
 
+    def _update_combined_plot(self, file_paths):
+        """Update the combined forward and reverse sweeps plot."""
+        if not isinstance(file_paths, list):
+            file_paths = [file_paths]
+
+        # Clear the plot
+        ax = self.combined_figure.axes[0]
+        ax.clear()
+
+        # Set plot properties
+        ax.set_title("Combined Forward and Reverse Sweeps")
+        ax.set_xlabel("Shear rate (1/s)")
+        ax.set_ylabel("Viscosity (Pa.s)")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.grid(True)
+
+        # Fixed colors and markers
+        forward_color = 'blue'
+        reverse_color = 'red'
+        forward_marker = 'o'  # circles
+        reverse_marker = '^'  # triangles
+
+        # Process data and plot
+        try:
+            if len(file_paths) == 1:
+                df, _, _ = self.processor.process_viscosity_single(file_paths[0], ["FORWARD", "REVERSE"])
+
+                # Plot forward sweep
+                if "FORWARD" in df["Sweep"].unique():
+                    forward_data = df[df["Sweep"] == "FORWARD"]
+                    ax.scatter(forward_data["Shear rate"], forward_data["Viscosity"],
+                               label="Forward Sweep", color=forward_color, marker=forward_marker,
+                               alpha=0.7, s=50)
+
+                # Plot reverse sweep
+                if "REVERSE" in df["Sweep"].unique():
+                    reverse_data = df[df["Sweep"] == "REVERSE"]
+                    ax.scatter(reverse_data["Shear rate"], reverse_data["Viscosity"],
+                               label="Reverse Sweep", color=reverse_color, marker=reverse_marker,
+                               alpha=0.7, s=50)
+            else:
+                # Multiple files
+                for i, file_path in enumerate(file_paths):
+                    df, _, _ = self.processor.process_viscosity_single(file_path, ["FORWARD", "REVERSE"])
+
+                    dataset_name = os.path.basename(file_path).split('_')[0]
+
+                    # Plot forward sweep
+                    if "FORWARD" in df["Sweep"].unique():
+                        forward_data = df[df["Sweep"] == "FORWARD"]
+                        ax.scatter(forward_data["Shear rate"], forward_data["Viscosity"],
+                                   label=f"{dataset_name} - Forward", color=forward_color,
+                                   marker=forward_marker, alpha=0.7, s=50)
+
+                    # Plot reverse sweep
+                    if "REVERSE" in df["Sweep"].unique():
+                        reverse_data = df[df["Sweep"] == "REVERSE"]
+                        ax.scatter(reverse_data["Shear rate"], reverse_data["Viscosity"],
+                                   label=f"{dataset_name} - Reverse", color=reverse_color,
+                                   marker=reverse_marker, alpha=0.7, s=50)
+
+            ax.legend()
+            self.combined_canvas.draw()
+
+        except Exception as e:
+            print(f"Error updating combined plot: {e}")
+
     def _process_viscosity_files(self):
         """Process selected viscosity files and update plots."""
         if not self.selected_files:
@@ -301,14 +423,19 @@ class RheologyGUI:
             self._update_forward_derivative(self.selected_files)
             self._update_reverse_derivative(self.selected_files)
 
+            # Update the combined plot
+            self._update_combined_plot(self.selected_files)
+
             # Update status
             self.viscosity_status_var.set(f"Processed {len(self.selected_files)} files")
             self.derivative_status_var.set(f"Processed {len(self.selected_files)} files")
+            self.combined_status_var.set(f"Processed {len(self.selected_files)} files")
 
         except Exception as e:
             messagebox.showerror("Processing Error", f"Error processing files: {e}")
             self.viscosity_status_var.set("Error processing files")
             self.derivative_status_var.set("Error processing derivatives")
+            self.combined_status_var.set("Error processing combined plot")
 
     def _update_forward_plot(self, file_paths):
         """Update the forward sweep plot."""
@@ -708,6 +835,31 @@ class RheologyGUI:
                 # Save the figure
                 self.derivative_figures[plot_index].savefig(file_path, dpi=300, bbox_inches='tight')
                 self.derivative_status_var.set(f"Plot saved to {os.path.basename(file_path)}")
+
+                # Ask if user wants to open the file
+                if messagebox.askyesno("Open File", "Would you like to open the saved plot?"):
+                    self.open_file(file_path)
+            except Exception as e:
+                messagebox.showerror("Save Error", f"Error saving plot: {e}")
+
+    def _save_combined_plot(self):
+        """Save the combined plot to a file."""
+        # Create default filename
+        default_name = "viscosity_combined.png"
+
+        # Ask user where to save the file
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".png",
+            filetypes=[("PNG files", "*.png"), ("PDF files", "*.pdf"), ("All files", "*.*")],
+            initialfile=default_name,
+            initialdir=self.output_directory
+        )
+
+        if file_path:
+            try:
+                # Save the figure
+                self.combined_figure.savefig(file_path, dpi=300, bbox_inches='tight')
+                self.combined_status_var.set(f"Plot saved to {os.path.basename(file_path)}")
 
                 # Ask if user wants to open the file
                 if messagebox.askyesno("Open File", "Would you like to open the saved plot?"):
