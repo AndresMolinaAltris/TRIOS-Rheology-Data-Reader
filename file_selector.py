@@ -155,9 +155,12 @@ class FileSelector(ttk.Frame):
         """Update the available files listbox with XLS files from the current directory."""
         self.available_listbox.delete(0, tk.END)
         try:
+            directory = self.current_dir.get()
             xls_files = [f for f in os.listdir(self.current_dir.get())
                          if f.lower().endswith('.xls')]
-            xls_files.sort()
+            # xls_files.sort()
+            # Sort by creation time (Oldest to Newest)
+            xls_files.sort(key=lambda f: os.path.getctime(os.path.join(directory, f)))
             for file in xls_files:
                 self.available_listbox.insert(tk.END, file)
         except Exception as e:
